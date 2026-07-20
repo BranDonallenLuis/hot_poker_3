@@ -3,8 +3,8 @@
 # Poker44 Miner Startup Script
 
 NETUID="${NETUID:-126}"
-WALLET_NAME="${WALLET_NAME:-hot-poker-3-wallet}"
-HOTKEY="${HOTKEY:-hot-poker-3-hotkey}"
+WALLET_NAME="${WALLET_NAME:-hot_poker}"
+HOTKEY="${HOTKEY:-hot-poker-3}"
 NETWORK="${NETWORK:-finney}"
 MINER_SCRIPT="${MINER_SCRIPT:-./neurons/miner.py}"
 PM2_NAME="${PM2_NAME:-hot_poker_3}"

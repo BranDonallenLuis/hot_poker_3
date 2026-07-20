@@ -83,6 +83,15 @@ manifest can meet transparent-miner policy.
 Use a separate registered hotkey and axon port for this miner. Confirm with the Poker44
 operator that one owner may run multiple competition UIDs before registering or deploying it.
 
+Current deployment identity (public addresses only):
+
+- wallet name: `hot_poker`
+- coldkey SS58: `5DWwZ1DdMVqtQv3BN5Z7SFSnkvRpTprauS6VKiQJAHCDENhf`
+- hotkey name: `hot-poker-3`
+- hotkey SS58: `5EJLe5vs1uX1yxYk8Qs9J5p21VyurtukusCTrxeF73TdcQSB`
+- default axon port: `7028`
+- default PM2 process: `hot_poker_3`
+
 ## Automatic Learning
 
 Automation uses `../Poker44-subnet/data/raw` by default, matching the training command.
