@@ -14,4 +14,5 @@ def test_inference_returns_one_bounded_score_per_chunk(tmp_path):
     joblib.dump({"model": FixedModel(), "feature_names": ["hand_count"], "threshold": 0.7}, path)
     scores = SuperPokerModel(path).predict_chunk_scores([[], [{}]])
     assert len(scores) == 2
-    assert all(0.5 < score <= 1.0 for score in scores)
+    assert scores[0] == 0.1
+    assert 0.5 < scores[1] <= 1.0

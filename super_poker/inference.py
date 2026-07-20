@@ -34,7 +34,10 @@ class SuperPokerModel:
         frame = frame.reindex(columns=self.feature_names, fill_value=0.0).fillna(0.0)
         raw = self.model.predict_proba(frame.astype(float))[:, 1]
         scores = []
-        for value in raw:
+        for chunk, value in zip(chunks, raw):
+            if not chunk:
+                scores.append(0.1)
+                continue
             score = self._remap(float(value), self.threshold)
             scores.append(round(min(1.0, max(0.0, score)) if math.isfinite(score) else 0.5, 6))
         return scores
