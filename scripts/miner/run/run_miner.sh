@@ -12,6 +12,7 @@ AXON_PORT="${AXON_PORT:-7028}"
 ALLOWED_VALIDATOR_HOTKEYS="${ALLOWED_VALIDATOR_HOTKEYS:-}"
 MODEL_PATH="${HOT_POKER_MODEL_PATH:-$(pwd)/artifacts/hot_poker_3.joblib}"
 PYTHON_BIN="${HOT_POKER_PYTHON:-python}"
+REPO_COMMIT="${POKER44_MODEL_REPO_COMMIT:-$(git rev-parse HEAD 2>/dev/null)}"
 
 if [ ! -f "$MINER_SCRIPT" ]; then
     echo "Error: Miner script not found at $MINER_SCRIPT"
@@ -20,6 +21,11 @@ fi
 
 if ! command -v pm2 &> /dev/null; then
     echo "Error: PM2 is not installed"
+    exit 1
+fi
+
+if [[ ! "$REPO_COMMIT" =~ ^[0-9a-f]{7,40}$ ]]; then
+    echo "Error: unable to resolve a valid Git commit for the model manifest"
     exit 1
 fi
 
@@ -35,6 +41,7 @@ pm2 delete $PM2_NAME 2>/dev/null || true
 
 export PYTHONPATH="$(pwd)"
 export HOT_POKER_MODEL_PATH="$MODEL_PATH"
+export POKER44_MODEL_REPO_COMMIT="$REPO_COMMIT"
 
 MINER_ARGS=(
   --netuid "$NETUID"
