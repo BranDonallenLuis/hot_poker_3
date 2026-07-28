@@ -122,7 +122,17 @@ PY
 
 verify_installation() {
   info_msg "Verifying participant environment setup..."
-  python -c "import bittensor; print(f'✓ Bittensor: {bittensor.__version__}')" || info_msg "Warning: Bittensor import failed"
+  python - <<'PY' || handle_error "Bittensor miner networking API is unavailable"
+import bittensor
+
+required = ("Synapse", "Axon", "Dendrite")
+missing = [name for name in required if not hasattr(bittensor, name)]
+if missing:
+    raise RuntimeError(
+        f"bittensor=={bittensor.__version__} is missing miner networking APIs: {missing}"
+    )
+print(f"Verified Bittensor miner networking API: {bittensor.__version__}")
+PY
   success_msg "Installation verification completed."
 }
 
