@@ -10,6 +10,8 @@ MINER_SCRIPT="${MINER_SCRIPT:-./neurons/miner.py}"
 PM2_NAME="${PM2_NAME:-hot_poker_3}"
 AXON_PORT="${AXON_PORT:-7028}"
 ALLOWED_VALIDATOR_HOTKEYS="${ALLOWED_VALIDATOR_HOTKEYS:-}"
+MODEL_PATH="${HOT_POKER_MODEL_PATH:-$(pwd)/artifacts/hot_poker_3.joblib}"
+PYTHON_BIN="${HOT_POKER_PYTHON:-python}"
 
 if [ ! -f "$MINER_SCRIPT" ]; then
     echo "Error: Miner script not found at $MINER_SCRIPT"
@@ -21,9 +23,18 @@ if ! command -v pm2 &> /dev/null; then
     exit 1
 fi
 
+"$PYTHON_BIN" scripts/model/preflight.py \
+  --artifact "$MODEL_PATH" \
+  --expected-model "hot-poker-3-ensemble" \
+  || {
+    echo "Error: model preflight failed; existing PM2 process was not changed"
+    exit 1
+  }
+
 pm2 delete $PM2_NAME 2>/dev/null || true
 
 export PYTHONPATH="$(pwd)"
+export HOT_POKER_MODEL_PATH="$MODEL_PATH"
 
 MINER_ARGS=(
   --netuid "$NETUID"

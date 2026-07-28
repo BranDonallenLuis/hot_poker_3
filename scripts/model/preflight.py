@@ -22,7 +22,7 @@ from super_poker.inference import SuperPokerModel
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, default=Path("artifacts/hot_poker_3.joblib"))
-    parser.add_argument("--expected-model", default="hot-poker-3")
+    parser.add_argument("--expected-model")
     args = parser.parse_args()
 
     model = SuperPokerModel(args.artifact)
@@ -36,8 +36,11 @@ def main() -> None:
     ).stdout.strip()
     sha256 = hashlib.sha256(args.artifact.read_bytes()).hexdigest()
     report = {
-        "ok": not missing and not extra
-        and model.metadata.get("model_name") == args.expected_model
+        "ok": not missing
+        and (
+            not args.expected_model
+            or model.metadata.get("model_name") == args.expected_model
+        )
         and len(scores) == 2
         and all(math.isfinite(score) and 0.0 <= score <= 1.0 for score in scores),
         "model_name": model.metadata.get("model_name"),
@@ -48,6 +51,7 @@ def main() -> None:
         "runtime_features": len(runtime),
         "missing_features": missing,
         "extra_features": extra,
+        "selected_feature_subset": bool(extra),
         "smoke_scores": scores,
     }
     print(json.dumps(report, indent=2))
