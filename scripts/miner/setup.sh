@@ -2,8 +2,8 @@
 # setup.sh - Setup Poker44 miner environment
 set -e
 
-SAFE_BITTENSOR_CLI_VERSION="9.20.0"
-SAFE_BITTENSOR_WALLET_VERSION="4.0.1"
+SAFE_BITTENSOR_CLI_VERSION="9.23.2"
+SAFE_BITTENSOR_WALLET_VERSION="4.1.0"
 BLOCKED_BITTENSOR_CLI_VERSION="9.18.2"
 BLOCKED_BITTENSOR_WALLET_VERSION="4.0.2"
 
@@ -72,6 +72,11 @@ install_modules() {
 }
 
 install_bittensor_cli() {
+  info_msg "Removing the legacy SCALE codec namespace..."
+  pip uninstall -y scalecodec cyscale >/dev/null 2>&1 || true
+  pip install "cyscale==0.5.0" \
+    || handle_error "Failed to install the SCALE codec runtime"
+
   info_msg "Installing pinned Bittensor CLI and wallet versions..."
   pip install "bittensor-cli==${SAFE_BITTENSOR_CLI_VERSION}" "bittensor-wallet==${SAFE_BITTENSOR_WALLET_VERSION}" \
     || handle_error "Failed to install pinned Bittensor packages"
@@ -84,8 +89,8 @@ guard_bittensor_versions() {
 from importlib import metadata
 from sys import exit
 
-safe_cli = "9.20.0"
-safe_wallet = "4.0.1"
+safe_cli = "9.23.2"
+safe_wallet = "4.1.0"
 blocked = {
     "bittensor-cli": "9.18.2",
     "bittensor-wallet": "4.0.2",
