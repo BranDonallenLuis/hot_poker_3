@@ -26,7 +26,21 @@ class SuperPokerModel:
 
     def _raw_scores(self, chunks: list[list[dict]]) -> np.ndarray:
         if self.is_sequence:
-            return np.asarray(self.model.predict_chunk_scores(chunks), dtype=float)
+            # The transformer can't process a chunk with no real actions (all-padding
+            # input errors). Score only chunks that have >=1 hand with actions; default
+            # the rest to a low raw score. Real live chunks always qualify.
+            raw = np.zeros(len(chunks), dtype=float)
+            idx = [
+                i for i, c in enumerate(chunks)
+                if c and any(isinstance(h, dict) and h.get("actions") for h in c)
+            ]
+            if idx:
+                vals = np.asarray(
+                    self.model.predict_chunk_scores([chunks[i] for i in idx]), dtype=float
+                )
+                for j, i in enumerate(idx):
+                    raw[i] = float(vals[j])
+            return raw
         frame = pd.DataFrame([chunk_features(chunk) for chunk in chunks])
         frame = frame.reindex(columns=self.feature_names, fill_value=0.0).fillna(0.0)
         return self.model.predict_proba(frame.astype(float))[:, 1]

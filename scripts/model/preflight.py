@@ -26,10 +26,13 @@ def main() -> None:
     args = parser.parse_args()
 
     model = SuperPokerModel(args.artifact)
+    # Sequence/Set-Transformer artifacts consume raw chunks and have no feature
+    # frame, so the tabular feature-compatibility check does not apply to them.
+    is_sequence = getattr(model, "is_sequence", False) or model.feature_names is None
     runtime = set(chunk_features([]))
-    required = set(model.feature_names)
-    missing = sorted(required - runtime)
-    extra = sorted(runtime - required)
+    required = set(model.feature_names) if model.feature_names else set()
+    missing = [] if is_sequence else sorted(required - runtime)
+    extra = [] if is_sequence else sorted(runtime - required)
     scores = model.predict_chunk_scores([[], [{}]])
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
