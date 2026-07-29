@@ -16,9 +16,20 @@ class SuperPokerModel:
     def __init__(self, artifact_path: str | Path):
         artifact = joblib.load(artifact_path)
         self.model = artifact["model"]
-        self.feature_names = list(artifact["feature_names"])
+        feature_names = artifact.get("feature_names")
+        self.feature_names = list(feature_names) if feature_names else None
         self.threshold = float(artifact["threshold"])
         self.metadata = dict(artifact.get("metadata") or {})
+        # Sequence/Set-Transformer artifacts consume RAW chunk payloads (no feature
+        # frame). Detect them and route to the wrapper's chunk-level predictor.
+        self.is_sequence = self.feature_names is None or str(self.metadata.get("type")) == "sequence"
+
+    def _raw_scores(self, chunks: list[list[dict]]) -> np.ndarray:
+        if self.is_sequence:
+            return np.asarray(self.model.predict_chunk_scores(chunks), dtype=float)
+        frame = pd.DataFrame([chunk_features(chunk) for chunk in chunks])
+        frame = frame.reindex(columns=self.feature_names, fill_value=0.0).fillna(0.0)
+        return self.model.predict_proba(frame.astype(float))[:, 1]
 
     @staticmethod
     def _remap(score: float, threshold: float) -> float:
@@ -30,9 +41,7 @@ class SuperPokerModel:
     def predict_chunk_scores(self, chunks: list[list[dict]]) -> list[float]:
         if not chunks:
             return []
-        frame = pd.DataFrame([chunk_features(chunk) for chunk in chunks])
-        frame = frame.reindex(columns=self.feature_names, fill_value=0.0).fillna(0.0)
-        raw = self.model.predict_proba(frame.astype(float))[:, 1]
+        raw = self._raw_scores(chunks)
         scores = []
         for chunk, value in zip(chunks, raw):
             if not chunk:

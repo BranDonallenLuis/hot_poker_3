@@ -52,6 +52,7 @@ class Miner(BaseMinerNeuron):
                 repo_root / "super_poker" / "features.py",
                 repo_root / "super_poker" / "inference.py",
                 repo_root / "super_poker" / "live_capture.py",
+                repo_root / "super_poker" / "sequence_model.py",
             ],
             defaults={
                 "model_name": metadata.get("model_name", "hot-poker-3-fallback"),
