@@ -31,7 +31,7 @@ fi
 
 "$PYTHON_BIN" scripts/model/preflight.py \
   --artifact "$MODEL_PATH" \
-  --expected-model "hot-poker-3-sequence" \
+  --expected-model "hot-poker-3-blend" \
   || {
     echo "Error: model preflight failed; existing PM2 process was not changed"
     exit 1
