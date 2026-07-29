@@ -221,3 +221,6 @@ artifacts/candidates/
 artifacts/backups/
 artifacts/approved/
 logs/
+
+# Live validator-query captures (diagnostic, never leaves the box)
+live_capture/

@@ -18,6 +18,7 @@ from poker44.utils.model_manifest import (
     manifest_digest,
 )
 from poker44.validator.synapse import DetectionSynapse
+from super_poker import live_capture
 from super_poker.inference import SuperPokerModel
 
 
@@ -50,6 +51,7 @@ class Miner(BaseMinerNeuron):
                 Path(__file__).resolve(),
                 repo_root / "super_poker" / "features.py",
                 repo_root / "super_poker" / "inference.py",
+                repo_root / "super_poker" / "live_capture.py",
             ],
             defaults={
                 "model_name": metadata.get("model_name", "hot-poker-3-fallback"),
@@ -142,6 +144,15 @@ class Miner(BaseMinerNeuron):
         synapse.predictions = [s >= 0.5 for s in scores]
         synapse.model_manifest = dict(self.model_manifest)
         bt.logging.info(f"Scored {len(chunks)} chunks with valid bot probabilities.")
+        # Diagnostic capture of the live (unlabeled) input distribution. Disabled unless
+        # POKER44_CAPTURE / POKER44_CAPTURE_BATCH are set; helpers swallow every error and
+        # this call is wrapped again so capture can never affect the scored response.
+        try:
+            validator_hotkey = getattr(getattr(synapse, "dendrite", None), "hotkey", None)
+            live_capture.capture(chunks, scores, self.uid, validator_hotkey)
+            live_capture.capture_batch(chunks, scores, self.uid, validator_hotkey)
+        except Exception:
+            pass
         return synapse
 
     @staticmethod
