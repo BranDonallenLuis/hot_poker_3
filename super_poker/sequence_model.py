@@ -70,6 +70,12 @@ try:
 except Exception:  # pragma: no cover
     pass
 
+# Silence the benign torch "nested tensors prototype" UserWarning emitted by
+# TransformerEncoder on every forward with padding masks. Cosmetic only; the
+# scored output is unaffected.
+import warnings as _warnings
+_warnings.filterwarnings("ignore", message=".*nested tensor.*", category=UserWarning)
+
 
 # --- tokenizer constants ----------------------------------------------------
 
