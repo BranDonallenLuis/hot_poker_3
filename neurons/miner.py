@@ -18,8 +18,10 @@ from poker44.utils.model_manifest import (
     manifest_digest,
 )
 from poker44.validator.synapse import DetectionSynapse
+from poker44.protocol import SessionDetectionSynapse
 from super_poker import live_capture
 from super_poker.inference import SuperPokerModel
+from super_poker.session_scorer import SessionScorer
 
 
 class Miner(BaseMinerNeuron):
@@ -53,6 +55,9 @@ class Miner(BaseMinerNeuron):
                 repo_root / "super_poker" / "inference.py",
                 repo_root / "super_poker" / "live_capture.py",
                 repo_root / "super_poker" / "sequence_model.py",
+                repo_root / "super_poker" / "session_features_v3.py",
+                repo_root / "super_poker" / "session_scorer.py",
+                repo_root / "poker44" / "protocol.py",
                 repo_root / "super_poker" / "blend.py",
             ],
             defaults={
@@ -93,7 +98,23 @@ class Miner(BaseMinerNeuron):
         self.manifest_compliance = evaluate_manifest_compliance(self.model_manifest)
         self.manifest_digest = manifest_digest(self.model_manifest)
         self._log_manifest_startup(repo_root)
-        
+
+        # Poker44 v3.0: also serve SessionDetectionSynapse (sessions + telemetry).
+        # Trained telemetry model if POKER44_V3_MODEL_PATH is set, else launch
+        # heuristic. Attached alongside DetectionSynapse for the v2.0->v3.0 switch.
+        self.session_scorer = SessionScorer()
+        try:
+            self.axon.attach(
+                forward_fn=self.forward_session,
+                blacklist_fn=self.blacklist_session,
+                priority_fn=self.priority_session,
+            )
+            bt.logging.info(
+                f"v3 SessionDetectionSynapse handler attached (scorer={self.session_scorer.model_version})"
+            )
+        except Exception as exc:
+            bt.logging.warning(f"Could not attach v3 session handler: {exc}")
+
         # # Attach handlers after initialization
         # self.axon.attach(
         #     forward_fn = self.forward,
@@ -215,6 +236,27 @@ class Miner(BaseMinerNeuron):
 
     async def priority(self, synapse: DetectionSynapse) -> float:
         """Assign priority based on caller's stake."""
+        return self.caller_priority(synapse)
+
+    # --- Poker44 v3.0 session handlers ---------------------------------------
+    async def forward_session(self, synapse: SessionDetectionSynapse) -> SessionDetectionSynapse:
+        """Return one bot-risk score per subject session (v3.0 tournaments)."""
+        sessions = synapse.sessions or []
+        scores = self.session_scorer.score_sessions(sessions)
+        synapse.risk_scores = scores
+        synapse.predictions = [s >= 0.5 for s in scores]
+        synapse.model_version = self.session_scorer.model_version
+        bt.logging.info(
+            f"v3 scored {len(sessions)} sessions "
+            f"(above_0.5={sum(1 for s in scores if s >= 0.5) / len(scores):.3f})"
+            if scores else "v3 received 0 sessions"
+        )
+        return synapse
+
+    async def blacklist_session(self, synapse: SessionDetectionSynapse) -> Tuple[bool, str]:
+        return self.common_blacklist(synapse)
+
+    async def priority_session(self, synapse: SessionDetectionSynapse) -> float:
         return self.caller_priority(synapse)
 
 
