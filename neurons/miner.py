@@ -18,10 +18,11 @@ from poker44.utils.model_manifest import (
     manifest_digest,
 )
 from poker44.validator.synapse import DetectionSynapse
-from poker44.protocol import SessionDetectionSynapse
+from poker44.protocol import SessionDetectionSynapse, MicroSessionDetectionSynapse
 from super_poker import live_capture
 from super_poker.inference import SuperPokerModel
 from super_poker.session_scorer import SessionScorer
+from super_poker.micro_session_scorer import MicroSessionScorer
 
 
 class Miner(BaseMinerNeuron):
@@ -57,7 +58,9 @@ class Miner(BaseMinerNeuron):
                 repo_root / "super_poker" / "sequence_model.py",
                 repo_root / "super_poker" / "session_features_v3.py",
                 repo_root / "super_poker" / "session_scorer.py",
+                repo_root / "super_poker" / "micro_session_scorer.py",
                 repo_root / "poker44" / "protocol.py",
+                repo_root / "poker44" / "contracts" / "microsession.py",
                 repo_root / "super_poker" / "blend.py",
             ],
             defaults={
@@ -114,6 +117,21 @@ class Miner(BaseMinerNeuron):
             )
         except Exception as exc:
             bt.logging.warning(f"Could not attach v3 session handler: {exc}")
+
+        # Poker44 v3.0 tournaments use MicroSessionDetectionSynapse (schema v4.1:
+        # 4 strategic decisions, NO telemetry) — this is the LIVE v3.0 contract.
+        self.micro_scorer = MicroSessionScorer()
+        try:
+            self.axon.attach(
+                forward_fn=self.forward_micro_sessions,
+                blacklist_fn=self.blacklist_micro_sessions,
+                priority_fn=self.priority_micro_sessions,
+            )
+            bt.logging.info(
+                f"v3 MicroSessionDetectionSynapse handler attached (scorer={self.micro_scorer.model_version})"
+            )
+        except Exception as exc:
+            bt.logging.warning(f"Could not attach micro-session handler: {exc}")
 
         # # Attach handlers after initialization
         # self.axon.attach(
@@ -257,6 +275,38 @@ class Miner(BaseMinerNeuron):
         return self.common_blacklist(synapse)
 
     async def priority_session(self, synapse: SessionDetectionSynapse) -> float:
+        return self.caller_priority(synapse)
+
+    # --- Poker44 v3.0 micro-session handlers (schema v4.1, LIVE contract) -----
+    async def forward_micro_sessions(
+        self, synapse: MicroSessionDetectionSynapse
+    ) -> MicroSessionDetectionSynapse:
+        """Return one bot-risk score per v4.1 micro-session item. Robust: always
+        emits exactly len(items) scores, never rejects a real query."""
+        items = synapse.items or []
+        try:
+            scores = self.micro_scorer.score_items(items)
+            if len(scores) != len(items):
+                scores = [0.5] * len(items)
+        except Exception as exc:
+            bt.logging.error(f"micro-session scoring error: {exc}")
+            scores = [0.5] * len(items)
+        synapse.risk_scores = scores
+        synapse.predictions = [s >= 0.5 for s in scores]
+        synapse.model_version = self.micro_scorer.model_version
+        bt.logging.info(
+            f"v3 scored {len(items)} micro-session items window={synapse.window_id} "
+            f"(above_0.5={sum(1 for s in scores if s >= 0.5) / len(scores):.3f})"
+            if scores else "v3 micro received 0 items"
+        )
+        return synapse
+
+    async def blacklist_micro_sessions(
+        self, synapse: MicroSessionDetectionSynapse
+    ) -> Tuple[bool, str]:
+        return self.common_blacklist(synapse)
+
+    async def priority_micro_sessions(self, synapse: MicroSessionDetectionSynapse) -> float:
         return self.caller_priority(synapse)
 
 
