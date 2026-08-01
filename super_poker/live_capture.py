@@ -198,3 +198,73 @@ def capture_batch(chunks, scores, miner_id, validator) -> None:
                 handle.write(payload)
     except Exception:
         pass
+
+
+# ---- v3.0 micro-session capture: the full MicroSessionDetectionSynapse query
+# (schema-v4.1 items + this miner's scores) saved as ONE record to
+# micro_<uid>.jsonl. Gated by POKER44_CAPTURE=1, deduped by item-set content,
+# fail-safe. INPUT-ONLY (v4.1 items carry no bot/human label). --------------
+_micro: dict[str, Any] = {"path": None, "seen": None, "full": False}
+
+
+def _micro_key(items) -> str:
+    blob = json.dumps(items, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def _load_micro_seen(path: Path) -> set:
+    seen: set = set()
+    try:
+        if path.exists():
+            with open(path) as handle:
+                for line in handle:
+                    try:
+                        seen.add(_micro_key(json.loads(line).get("items") or []))
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+    return seen
+
+
+def capture_micro(items, scores, miner_id, validator, window_id="") -> None:
+    """Append a v3.0 micro-session query (v4.1 items + this miner's scores) as one
+    JSON record to <dir>/micro_<uid>.jsonl. One record per unique item set.
+    Input-only (no labels). Never raises — capture must not affect serving."""
+    if not enabled() or _micro["full"] or not items:
+        return
+    try:
+        _DIR.mkdir(parents=True, exist_ok=True)
+        if _micro["path"] is None:
+            _micro["path"] = _DIR / f"micro_{str(miner_id)[:16]}.jsonl"
+        path: Path = _micro["path"]
+        if path.exists() and path.stat().st_size >= _MAX_BYTES:
+            _micro["full"] = True
+            return
+        if _micro["seen"] is None:
+            _micro["seen"] = _load_micro_seen(path)
+        mkey = _micro_key(items)
+        if mkey in _micro["seen"]:
+            return  # this exact item set already saved
+        _micro["seen"].add(mkey)
+        out_scores = []
+        for s in scores:
+            try:
+                out_scores.append(round(float(s), 6))
+            except (TypeError, ValueError):
+                out_scores.append(None)
+        rec = {
+            "t": round(time.time(), 2),
+            "v": str(validator or "")[:8],
+            "uid": str(miner_id),
+            "window_id": str(window_id or ""),
+            "n_items": len(items),
+            "scores": out_scores,
+            "items": list(items),
+        }
+        payload = json.dumps(rec, separators=(",", ":"), default=str) + "\n"
+        with _LOCK:
+            with open(path, "a") as handle:
+                handle.write(payload)
+    except Exception:
+        pass

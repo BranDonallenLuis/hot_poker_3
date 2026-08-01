@@ -299,6 +299,15 @@ class Miner(BaseMinerNeuron):
             f"(above_0.5={sum(1 for s in scores if s >= 0.5) / len(scores):.3f})"
             if scores else "v3 micro received 0 items"
         )
+        # Diagnostic capture of the live (unlabeled) v4.1 micro-session inputs.
+        # Gated by POKER44_CAPTURE; fail-safe so it can never affect scoring.
+        try:
+            validator_hotkey = getattr(getattr(synapse, "dendrite", None), "hotkey", None)
+            live_capture.capture_micro(
+                items, scores, self.uid, validator_hotkey, synapse.window_id
+            )
+        except Exception:
+            pass
         return synapse
 
     async def blacklist_micro_sessions(
