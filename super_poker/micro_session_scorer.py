@@ -98,6 +98,29 @@ class MicroSessionScorer:
             except Exception:
                 self.model = None
 
+        # Optional empirical-CDF calibration for the heuristic (used ONLY when no
+        # trained model). Recenters the heuristic's output distribution using
+        # captured live items so ~50% of items score >=0.5 instead of clustering
+        # below it. Monotone -> ranking is unchanged. JSON produced by
+        # scripts/calibrate_micro_heuristic.py; path via POKER44_V4_CALIBRATION_PATH.
+        self._cal = None
+        if self.model is None:
+            cal_path = os.getenv("POKER44_V4_CALIBRATION_PATH", "")
+            if cal_path and os.path.exists(cal_path):
+                try:
+                    import json as _json
+
+                    with open(cal_path) as _fh:
+                        cal = _json.load(_fh)
+                    ref = sorted(float(x) for x in cal.get("ref_scores", []))
+                    if ref:
+                        self._cal = ref
+                        self.model_version = str(
+                            cal.get("model_version", "v4-micro-cal")
+                        )
+                except Exception:
+                    self._cal = None
+
     def score_items(self, items: list[dict]) -> list[float]:
         if not items:
             return []
@@ -108,4 +131,17 @@ class MicroSessionScorer:
             X = X.reindex(columns=self.feature_names, fill_value=0.0).fillna(0.0)
             raw = self.model.predict_proba(X.astype(float))[:, 1]
             return [float(min(1.0, max(0.0, v))) for v in raw]
-        return [heuristic_micro_score(it) for it in items]
+        scores = [heuristic_micro_score(it) for it in items]
+        if self._cal is not None:
+            import bisect
+
+            n = len(self._cal)
+            # midpoint percentile: ties map to the MIDDLE of their rank band so
+            # the distribution centers at 0.5 (bisect_right alone overshoots).
+            scores = [
+                max(0.0, min(1.0,
+                    (bisect.bisect_left(self._cal, s)
+                     + bisect.bisect_right(self._cal, s)) / (2.0 * n)))
+                for s in scores
+            ]
+        return scores
