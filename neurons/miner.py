@@ -61,6 +61,7 @@ class Miner(BaseMinerNeuron):
                 repo_root / "super_poker" / "micro_session_scorer.py",
                 repo_root / "poker44" / "protocol.py",
                 repo_root / "poker44" / "contracts" / "microsession.py",
+                repo_root / "poker44" / "utils" / "encrypted_endpoints.py",
                 repo_root / "super_poker" / "blend.py",
             ],
             defaults={
