@@ -42,6 +42,9 @@ def main():
     ap.add_argument("--out", default="artifacts/micro_calibration.json")
     ap.add_argument("--model-version", default="v4-micro-cal")
     ap.add_argument("--max-ref", type=int, default=20000)
+    ap.add_argument("--target-rate", type=float, default=0.5,
+                    help="fraction of items to score >=0.5 (set to the inferred "
+                         "true bot rate to match the eval base rate; 0.5=center)")
     args = ap.parse_args()
 
     files = []
@@ -81,11 +84,13 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as fh:
         json.dump({"ref_scores": raw, "model_version": args.model_version,
-                   "type": "empirical-cdf", "n_items": n_items}, fh)
+                   "type": "empirical-cdf", "n_items": n_items,
+                   "target_rate": args.target_rate}, fh)
 
     print(f"[cal] {n_items} items | ref size {len(raw)} | "
           f"raw median={med:.3f} | raw frac>=0.5={frac_hi:.3f}")
-    print("[cal] after calibration: median -> ~0.5, ~50% of items score >=0.5")
+    print(f"[cal] after calibration: ~{args.target_rate*100:.0f}% of items will "
+          f"score >=0.5 (target_rate={args.target_rate})")
     print(f"[cal] wrote {out}  version={args.model_version}")
     print(f"[next] export POKER44_V4_CALIBRATION_PATH={out.resolve()}  "
           "then restart between rounds")

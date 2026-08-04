@@ -104,6 +104,7 @@ class MicroSessionScorer:
         # below it. Monotone -> ranking is unchanged. JSON produced by
         # scripts/calibrate_micro_heuristic.py; path via POKER44_V4_CALIBRATION_PATH.
         self._cal = None
+        self._cal_target = 0.5
         if self.model is None:
             cal_path = os.getenv("POKER44_V4_CALIBRATION_PATH", "")
             if cal_path and os.path.exists(cal_path):
@@ -115,6 +116,11 @@ class MicroSessionScorer:
                     ref = sorted(float(x) for x in cal.get("ref_scores", []))
                     if ref:
                         self._cal = ref
+                        # target fraction of items that should score >=0.5.
+                        # 0.5 = center at median; set to the inferred true bot
+                        # rate to match the eval base rate (better accuracy +
+                        # brier_skill). Monotone -> ranking unchanged.
+                        self._cal_target = float(cal.get("target_rate", 0.5))
                         self.model_version = str(
                             cal.get("model_version", "v4-micro-cal")
                         )
@@ -136,12 +142,21 @@ class MicroSessionScorer:
             import bisect
 
             n = len(self._cal)
-            # midpoint percentile: ties map to the MIDDLE of their rank band so
-            # the distribution centers at 0.5 (bisect_right alone overshoots).
-            scores = [
-                max(0.0, min(1.0,
-                    (bisect.bisect_left(self._cal, s)
-                     + bisect.bisect_right(self._cal, s)) / (2.0 * n)))
-                for s in scores
-            ]
+            t = 1.0 - self._cal_target  # percentile that should map to 0.5
+            out = []
+            for s in scores:
+                # midpoint percentile: ties map to the MIDDLE of their rank band
+                p = (bisect.bisect_left(self._cal, s)
+                     + bisect.bisect_right(self._cal, s)) / (2.0 * n)
+                # piecewise-linear remap so `target` fraction of items land >=0.5
+                if t <= 0.0:
+                    c = 0.5 + 0.5 * p
+                elif t >= 1.0:
+                    c = 0.5 * p
+                elif p <= t:
+                    c = 0.5 * p / t
+                else:
+                    c = 0.5 + 0.5 * (p - t) / (1.0 - t)
+                out.append(max(0.0, min(1.0, c)))
+            scores = out
         return scores
