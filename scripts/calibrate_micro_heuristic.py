@@ -32,7 +32,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from super_poker.micro_session_scorer import heuristic_micro_score  # noqa: E402
+from super_poker.micro_session_scorer import _select_heuristic  # noqa: E402
+
+_hfn = _select_heuristic()  # respects POKER44_V4_HEURISTIC (default | atypicality)
 
 
 def main():
@@ -65,7 +67,7 @@ def main():
                 continue
             for it in rec.get("items", []):
                 try:
-                    raw.append(heuristic_micro_score(it))
+                    raw.append(_hfn(it))
                     n_items += 1
                 except Exception:
                     continue

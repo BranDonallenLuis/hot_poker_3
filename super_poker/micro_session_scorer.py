@@ -76,6 +76,31 @@ def heuristic_micro_score(item: dict[str, Any]) -> float:
     return max(0.0, min(1.0, score))
 
 
+def atypicality_micro_score(item: dict[str, Any]) -> float:
+    """Alternative heuristic: score DEVIATION from typical balanced human play in
+    ANY direction (bots are extreme or rigid; humans are varied). Catches the
+    passive/rigid families (nit, station) the aggression prior misses, at some
+    cost to the aggressive ones. Deployed via POKER44_V4_HEURISTIC=atypicality
+    to A/B whether the real bots are passive/rigid vs aggressive."""
+    f = micro_features(item)
+    s = 0.0
+    s += 0.30 * (1.0 - f["action_diversity"])                       # mechanical/repetitive
+    s += 0.10 * (1.0 - f["size_diversity"])                         # fixed sizing
+    s += 0.20 * min(1.0, abs(f["aggr_rate"] - 0.35) / 0.35)         # aggression extreme either way
+    dom = max(f["share_fold"], f["share_call"], f["share_raise"], f["share_check"])
+    s += 0.15 * max(0.0, dom - 0.5)                                 # one action dominates
+    s += 0.15 * (f["allin_rate"] + f["bigsize_rate"]) / 2.0         # maniac tell
+    s += 0.10 * f["aggr_vs_nocall"]                                 # bet into no pressure
+    return max(0.0, min(1.0, s))
+
+
+def _select_heuristic():
+    """Pick the heuristic via POKER44_V4_HEURISTIC ('atypicality' | default)."""
+    if os.getenv("POKER44_V4_HEURISTIC", "").strip().lower() == "atypicality":
+        return atypicality_micro_score
+    return heuristic_micro_score
+
+
 class MicroSessionScorer:
     """Scores v4.1 micro-session items; trained model via POKER44_V4_MODEL_PATH,
     else the provisional heuristic."""
@@ -84,6 +109,7 @@ class MicroSessionScorer:
         self.model = None
         self.feature_names = None
         self.model_version = "v4-micro-heuristic"
+        self._hfn = _select_heuristic()
         path = model_path or os.getenv("POKER44_V4_MODEL_PATH", "")
         if path and os.path.exists(path):
             try:
@@ -137,7 +163,7 @@ class MicroSessionScorer:
             X = X.reindex(columns=self.feature_names, fill_value=0.0).fillna(0.0)
             raw = self.model.predict_proba(X.astype(float))[:, 1]
             return [float(min(1.0, max(0.0, v))) for v in raw]
-        scores = [heuristic_micro_score(it) for it in items]
+        scores = [self._hfn(it) for it in items]
         if self._cal is not None:
             import bisect
 
